@@ -199,11 +199,11 @@ int main(int argc, char *argv[]){
 	  return -1;
   }
 
-	//sleep(6);
+	// sleep(6);
   //Recieve the problem
   printf("We are here\n");
   recieveMessage(socket_desc, server_message, sizeof(server_message));
-  
+	// sleep(6);
   if(strcmp(server_message, "ERROR TO\n") == 0){
 	  printf("We got TO'ed. Closing connection\n");
 	  close(socket_desc);
@@ -217,6 +217,7 @@ int main(int argc, char *argv[]){
   
   //Recieve the final Message
   recieveMessage(socket_desc, server_message, sizeof(server_message));
+
   if(strcmp(server_message, "ERROR TO\n") == 0){
 	  printf("We got TO'ed. Closing connection\n");
 	  close(socket_desc);

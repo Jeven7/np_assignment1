@@ -109,16 +109,14 @@ int main(int argc, char *argv[]){
     perror("listen");
     exit(1);
   }
- 
+  // sleep(30);
   double fv1,fv2,fresult,client_fresult,ans;
   int iv1,iv2,iresult,client_iresult;
   char msg[1450];
   char *op=randomType();
-
-  int childCount = 0;
   int readsize;
   struct timeval timeout;
-  timeout.tv_sec = 10;//Set the timeout to be 5 seconds
+  timeout.tv_sec = 5;//Set the timeout to be 5 seconds
   timeout.tv_usec = 0;
   while(1){
     accept_sockfd = accept(sockfd, (struct sockaddr*)&connector_address, &sin_size);
@@ -127,31 +125,15 @@ int main(int argc, char *argv[]){
       perror("accept");
       continue;
     }
-    if (childCount >= 5) {
-      // reject the 6th client
-      fprintf(stderr,"Server is busy. Please try again later.\n");
-      // strcpy(msg, "Server is busy. Please try again later.\n");
-      if((readsize = send(accept_sockfd, msg, strlen(msg), 0)) == -1){
-            perror("send");
-            close(accept_sockfd);
-            continue;
-      }
-      close(accept_sockfd);
-      continue;
-    }
-    else{
-      ++childCount;
-    }
     //Converts IPv4 or IPv6 Internet network addresses into strings in the Internet Standard format
     inet_ntop(connector_address.ss_family, get_in_addr((struct sockaddr *)&connector_address), s, sizeof(s));
     #ifdef DEBUG
-      printf("server: Connection client %d\n",childCount);
+      printf("server: Connection client\n");
     #endif
     strcpy(msg, "TEXT TCP 1.0\n\n");
     if((readsize = send(accept_sockfd, msg, strlen(msg), 0)) == -1){
       perror("send");
       close(accept_sockfd);
-      --childCount;
       continue;
     }
     //while(1){
@@ -164,12 +146,11 @@ int main(int argc, char *argv[]){
         #endif
         readsize = send(accept_sockfd, msg, strlen(msg), 0);
         close(accept_sockfd);
-        --childCount;
         continue;
       }
       msg[readsize - 1] = '\0';
       #ifdef DEBUG
-      printf("server: Recieved a message %s from client %d \n", msg,childCount);
+      printf("server: Recieved a message %s from client\n", msg);
       #endif
 
       if(strcmp(msg, "OK") == 0){
@@ -177,7 +158,7 @@ int main(int argc, char *argv[]){
             perror("calclib init");
         }
         /* clear string for sending */
-        memset(msg, sizeof(msg),0);
+        // memset(msg, sizeof(msg),0);
         if(op[0] == 'f'){ //radomize float numbers
           fv1 = randomFloat();
           fv2 = randomFloat();
@@ -188,7 +169,6 @@ int main(int argc, char *argv[]){
           if((readsize = send(accept_sockfd, msg, strlen(msg), 0)) == -1){
             perror("send");
             close(accept_sockfd);
-            --childCount;
             continue;
           }
           if(strcmp(op,"fadd")==0){
@@ -210,13 +190,12 @@ int main(int argc, char *argv[]){
              #endif
             readsize = send(accept_sockfd, msg, strlen(msg), 0);
             close(accept_sockfd);
-            --childCount;
             continue;
          }
          msg[readsize - 1] = '\0';
          rv = sscanf(msg, "%lg", &client_fresult);
          #ifdef DEBUG
-             printf("Got answer %8.8g My answer: %8.8g \n", client_fresult, fresult);
+             printf("Got answer %8.8g Expected answer: %8.8g \n", client_fresult, fresult);
           #endif
           ans = abs(client_fresult-fresult);
          if(ans < 0.0001){
@@ -227,12 +206,10 @@ int main(int argc, char *argv[]){
            if((readsize = send(accept_sockfd, msg, strlen(msg), 0) == -1)){
             perror("send");
             close(accept_sockfd);
-            --childCount;
             continue;
           }
           msg[readsize - 1] = '\0';
           close(accept_sockfd);
-          --childCount;
           continue;
          }
          else{
@@ -243,9 +220,11 @@ int main(int argc, char *argv[]){
            if((readsize = send(accept_sockfd, msg, strlen(msg), 0)) == -1){
             perror("send");
             close(accept_sockfd);
-            --childCount;
             continue;
           }
+          msg[readsize - 1] = '\0';
+          close(accept_sockfd);
+          continue;
          }
         }
         else{//radomize int numbers
@@ -258,7 +237,6 @@ int main(int argc, char *argv[]){
           if((readsize = send(accept_sockfd, msg, strlen(msg), 0)) == -1){
             perror("send");
             close(accept_sockfd);
-            --childCount;
             continue;
           }
           if(strcmp(op,"add")==0){
@@ -281,7 +259,6 @@ int main(int argc, char *argv[]){
              #endif
             readsize = send(accept_sockfd, &msg, strlen(msg), 0);
             close(accept_sockfd);
-            --childCount;
             continue;
          }
          msg[readsize - 1] = '\0';
@@ -289,7 +266,7 @@ int main(int argc, char *argv[]){
          
           ans = abs(client_iresult-iresult);
           #ifdef DEBUG
-             printf("Got anser %d My answer: %d \n", client_iresult, iresult);
+             printf("Got anser %d Expected answer: %d \n", client_iresult, iresult);
           #endif
          if(ans < 0.0001){
            strcpy(msg, "OK\n");
@@ -299,12 +276,10 @@ int main(int argc, char *argv[]){
            if((readsize = send(accept_sockfd, msg, strlen(msg), 0)) == -1){
             perror("send");
             close(accept_sockfd);
-            --childCount;
             continue;
           }
           msg[readsize - 1] = '\0';
           close(accept_sockfd);
-          --childCount;
           continue;
          }
          else{
@@ -315,16 +290,16 @@ int main(int argc, char *argv[]){
            if((readsize = send(accept_sockfd, msg, strlen(msg), 0)) == -1){
             perror("send");
             close(accept_sockfd);
-            --childCount;
             continue;
           }
           msg[readsize - 1] = '\0';
+          close(accept_sockfd);
+          continue;
          }
 
         }
       }else{
         close(accept_sockfd);
-        --childCount;
         continue;
       }
       
