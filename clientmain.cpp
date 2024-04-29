@@ -106,58 +106,76 @@ int main(int argc, char *argv[]){
 
 	//Variables
 	char* splits[CAP];
-  char* p = strtok(argv[1], ":");
+  //char* p = strtok(argv[1], ":");
   int delimCounter = 0;
   char *Desthost;
   char *Destport;
-  int port;
 	int serverfd;
 	struct sockaddr_in client;
 	char server_message[CAP];
   //Get argv
-  while(p != NULL){
-  	//Look for the amount of ":" in argv to determine if ipv4 or ipv6
-  	splits[delimCounter++] = p;
-  	p = strtok(NULL, ":");
-  }
-  Destport = splits[--delimCounter];
-  Desthost = splits[0];
-  for(int i = 1;i<delimCounter;i++){
-  	
-  	sprintf(Desthost, "%s:%s",Desthost, splits[i]);
-  }
-  port=atoi(Destport);
-  printf("Host %s and port %d.\n",Desthost,port);
+  if (argc != 2) {
+		fprintf(stderr, "Please enter the correct form: <ip>:<port> \n");
+		exit(1);
+	}
+	else {
+		// char delim[]=":";
+		// Desthost=strtok(argv[1],delim);
+		// Destport=strtok(NULL,delim);
+		char* lastColon = strrchr(argv[1], ':');
+		if (lastColon == NULL) {
+			fprintf(stderr, "Invalid format. Please enter the correct form: <ip>:<port> \n");
+			exit(1);
+		}
+
+		*lastColon = '\0';
+		Desthost = argv[1];
+		Destport = lastColon + 1;
+	}
+	int port=atoi(Destport);
+	printf("Host %s, and port %d.\n", Desthost, port);
 	
-	//Getaddrinfo
-	struct addrinfo hints, *serverinfo = 0;
+	int sockfd, new_fd;//Listening o sockfd, new connection on accept_sockfd
+	struct addrinfo hints, * servinfo, * p;
+	struct sockaddr_storage connector_address; //Connectors address info
+	socklen_t sin_size = sizeof(connector_address);
+	struct sockaddr_in server_addr;
+	int choice = 1;// Integer for setting socket option
+	char s[INET6_ADDRSTRLEN];// Array for storing IP address
+	int rv;
+
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	
-	if(getaddrinfo(Desthost, Destport, &hints, &serverinfo) < 0){
-		printf("Getaddrinfo error: %s\n", strerror(errno)); 
-		exit(0);
-	} //else printf("Getaddrinfo success\n");
-  
-  //Create TCP socket
-  int socket_desc;
-  struct sockaddr_in server_addr;
-  socket_desc = socket(serverinfo->ai_family, serverinfo->ai_socktype, serverinfo->ai_protocol);
-  
-  if(socket_desc < 0){
-  	#ifdef DEBUG
-  	printf("Unable to create socket\n");
-  	#endif
-  	return -1;
-  }
-  #ifdef DEBUG
-  else printf("Socket Created\n");
-  #endif
-  
-  
-#ifdef DEBUG 
-  printf("Host %s, and Port %d.\n",Desthost,port);
+	hints.ai_family = AF_UNSPEC; //supports both IPv4 and IPv6
+	hints.ai_socktype = SOCK_STREAM;//Socket type is TCP
+	hints.ai_flags = AI_PASSIVE;// Use passive mode for server
+
+	if ((rv = getaddrinfo(NULL, Destport, &hints, &servinfo)) != 0) {
+		fprintf(stderr, "getaddrinfo : %s \n", gai_strerror(rv));
+		return 1;
+	}
+
+	for (p = servinfo; p != NULL; p = p->ai_next) {
+		//Get the address of the server, create a listening socket, and bind it to the specified address
+		if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+			//Create a socket based on the current address information struct, if the creation fails, print the error message and move on to the next struct
+			perror("Server: socket");
+			continue;
+		}
+
+		void* addr;
+		if (p->ai_family == AF_INET) { // IPv4
+			struct sockaddr_in* ipv4 = (struct sockaddr_in*)p->ai_addr;
+			addr = &(ipv4->sin_addr);
+		}
+		else { // IPv6
+			struct sockaddr_in6* ipv6 = (struct sockaddr_in6*)p->ai_addr;
+			addr = &(ipv6->sin6_addr);
+		}
+		inet_ntop(p->ai_family, addr, Desthost, sizeof(Desthost));
+		break;
+	}
+#ifdef DEBUG  
+	printf("Host %s, and port %d.\n", Desthost, port);
 #endif
 
   //Create Socket Structure
@@ -167,7 +185,7 @@ int main(int argc, char *argv[]){
   int error;
   
   //Establish Connection
-  error = connect(socket_desc, serverinfo->ai_addr, serverinfo->ai_addrlen);
+  error = connect(sockfd, p->ai_addr, p->ai_addrlen);
   if(error < 0){
   	#ifdef DEBUG
   	printf("Unable to connect\n");
@@ -180,51 +198,51 @@ int main(int argc, char *argv[]){
   #endif
   
   //Recieve message from server
-  recieveMessage(socket_desc, server_message, sizeof(server_message));
+  recieveMessage(sockfd, server_message, sizeof(server_message));
   
   //Compare strings to verify version
 
   if(strcmp(server_message,"TEXT TCP 1.0\n\n") == 0){
   	#ifdef DEBUG
   	printf("Same\n");
-  	#endif DEBUG
+  	#endif
   	char* str = "OK\n";
   	//strcpy(client_message, str);
   	//Send back the OK
-  	sendMessage(socket_desc, str, strlen(str));
+  	sendMessage(sockfd, str, strlen(str));
   }
   else{
 	  printf("Closing connection\n");
-	  close(socket_desc);
+	  close(sockfd);
 	  return -1;
   }
 
-	// sleep(6);
+	// sleep(4);
   //Recieve the problem
   printf("We are here\n");
-  recieveMessage(socket_desc, server_message, sizeof(server_message));
+  recieveMessage(sockfd, server_message, sizeof(server_message));
 	// sleep(6);
   if(strcmp(server_message, "ERROR TO\n") == 0){
 	  printf("We got TO'ed. Closing connection\n");
-	  close(socket_desc);
+	  close(sockfd);
 	  return -1;
   }
   //Translate Message
-  calculateMessage(server_message, socket_desc);
+  calculateMessage(server_message, sockfd);
   
   //Send answer to server
   //sendMessage(socket_desc, client_message, sizeof(client_message));
   
   //Recieve the final Message
-  recieveMessage(socket_desc, server_message, sizeof(server_message));
+  recieveMessage(sockfd, server_message, sizeof(server_message));
 
   if(strcmp(server_message, "ERROR TO\n") == 0){
 	  printf("We got TO'ed. Closing connection\n");
-	  close(socket_desc);
+	  close(sockfd);
 	  return -1;
   }
   //Close socket and quit program
   //TODO
-  close(socket_desc);
+  close(sockfd);
   return 0;
 }
